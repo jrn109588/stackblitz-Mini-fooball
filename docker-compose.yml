@@ -1,12 +1,15 @@
 services:
-  mini-football:
+  app-aula:
     build:
       context: .
       args:
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
-        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
-    container_name: mini-football
+        # Defina no Portainer (Stack > Environment variables) ou num .env local
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?defina VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:?defina VITE_SUPABASE_ANON_KEY}
+    container_name: aula-pratica-nuvem
     restart: always
+    environment:
+      - PORT=8080
     networks:
       - proxy-net
 

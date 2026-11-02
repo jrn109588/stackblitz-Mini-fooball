@@ -1,0 +1,48 @@
+name: CI/CD - Integração e Entrega Contínua
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  run-tests:
+    name: Executar Testes Unitários
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar o ambiente Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: 3. Instalar dependências
+        run: npm ci
+
+      - name: 4. Executar Testes Automatizados
+        run: npm test
+
+  build-docker:
+    name: Validar Build do Container
+    needs: run-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 3. Testar Build da Imagem Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: aula-pratica-nuvem:latest
+          build-args: |
+            VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+            VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}

@@ -31,10 +31,6 @@ button.mini { padding: 4px 10px; font-size: .8rem; background: #2a3a31; color: v
 
 .cfg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: start; }
 .card label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: .9rem; }
-.swrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--muted); } .swrow span { width: 52px; font-size: .9rem; }
-.sw { width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 2px solid var(--borda); }
-.sw.on { border-color: #fff; box-shadow: 0 0 0 2px var(--verde); }
-#prev { align-self: center; background: #0e1512; border-radius: 12px; }
 .tedit { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--borda); }
 
 .gamewrap { max-width: 1400px; } .stage { position: relative; }
@@ -53,3 +49,15 @@ canvas { width: 100%; height: auto; border-radius: 12px; display: block; backgro
 .board .nota { font-weight: 800; font-size: 1.15rem; color: var(--verde); }
 .board em { font-style: normal; font-size: .75rem; margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: #ffd60a; color: #111; }
 .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; border: 1px solid #fff; }
+
+.rank { grid-column: 1 / -1; }
+.tabs { flex-wrap: wrap; } button.mini.on { background: var(--verde); color: #04140c; }
+.ranktable { border-collapse: collapse; width: 100%; }
+.ranktable th, .ranktable td { padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--borda); }
+.ranktable th:nth-child(2), .ranktable td:nth-child(2) { text-align: left; }
+.ranktable th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+.ranktable .sel { color: var(--verde); font-weight: 800; } .ranktable tr.me td { background: rgba(255, 214, 10, .08); }
+
+.toasts { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; z-index: 2; }
+.toast { background: rgba(8, 12, 10, .85); border: 1px solid #ffd60a; color: var(--txt); padding: 8px 16px; border-radius: 10px; font-weight: 600; animation: toast-in .2s ease-out; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } }

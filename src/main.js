@@ -1,16 +1,6 @@
 import './style.css';
 import { supabase } from './supabase.js';
-import {
-  startGame,
-  drawPlayer,
-  SKINS,
-  HAIR_COLORS,
-  HAIR_STYLES,
-  PATTERNS,
-  FIELDS,
-  BALLS,
-  colorDist,
-} from './game.js';
+import { startGame, PATTERNS, FIELDS, BALLS, colorDist } from './game.js';
 
 const $ = (s) => document.querySelector(s);
 const app = $('#app');
@@ -23,7 +13,6 @@ const esc = (t = '') =>
       ])
   );
 
-const DEF_LOOK = { skin: 1, hair_color: 0, hair_style: 1, number: 10 };
 const DEF_TEAMS = [
   {
     team: 'red',
@@ -54,7 +43,6 @@ let user = null,
 
 const T = (t) => teams[t] || DEF_TEAMS.find((d) => d.team === t);
 const nick = () => user.user_metadata?.nickname || user.email.split('@')[0];
-const myLook = () => ({ ...DEF_LOOK, ...(user.user_metadata?.look || {}) });
 const notice = (m) => {
   const el = $('#msg');
   if (el) el.textContent = m;
@@ -152,6 +140,15 @@ async function showList() {
       <p id="msg"></p>
     </section>
     <section class="card col"><h2>Lobbies abertos</h2><div id="lista" class="col"></div></section>
+    <section class="card col rank">
+      <h2>Ranking</h2>
+      <div class="row tabs">
+        <button class="mini on" data-rank="goals">Artilheiros</button>
+        <button class="mini" data-rank="touches">Toques na bola</button>
+        <button class="mini" data-rank="win_rate">Aproveitamento</button>
+      </div>
+      <div id="ranking"></div>
+    </section>
   </main>`;
   $('#sair').onclick = () => supabase.auth.signOut();
   $('#criar').onclick = createLobby;
@@ -166,6 +163,12 @@ async function showList() {
   };
   $('#lista').onclick = (e) =>
     e.target.dataset.join && joinLobby(e.target.dataset.join);
+  $('.tabs').onclick = (e) => {
+    const k = e.target.dataset.rank;
+    if (!k) return;
+    document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b === e.target));
+    loadRanking(k);
+  };
   let t;
   const reload = () => {
     clearTimeout(t);
@@ -187,6 +190,7 @@ async function showList() {
       .subscribe()
   );
   loadList();
+  loadRanking('goals');
 }
 
 async function loadList() {
@@ -217,6 +221,57 @@ async function loadList() {
     : '<p class="vazio">Nenhum lobby aberto. Crie o primeiro!</p>';
 }
 
+/* ---------- Ranking (tabela player_stats / view player_leaderboard) ---------- */
+const RANK_COLS = [
+  ['goals', 'Gols'],
+  ['touches', 'Toques'],
+  ['matches', 'Partidas'],
+  ['wins', 'Vitórias'],
+  ['win_rate', '% vitórias'],
+];
+async function loadRanking(by = 'goals') {
+  const MIN = 3; // aproveitamento só conta com um mínimo de partidas
+  let q = supabase.from('player_leaderboard').select('*');
+  if (by === 'win_rate') q = q.gte('matches', MIN);
+  const { data, error } = await q
+    .order(by, { ascending: false })
+    .order('matches', { ascending: false })
+    .limit(10);
+  const el = $('#ranking');
+  if (!el) return;
+  if (error) {
+    el.innerHTML = `<p class="vazio">Ranking indisponível: ${esc(error.message)}</p>`;
+    return;
+  }
+  if (!data.length) {
+    el.innerHTML = `<p class="vazio">${
+      by === 'win_rate'
+        ? `Ninguém com ${MIN}+ partidas ainda.`
+        : 'Ninguém jogou ainda. Termine uma partida para entrar no ranking!'
+    }</p>`;
+    return;
+  }
+  const head = RANK_COLS.map(
+    ([k, l]) => `<th class="${k === by ? 'sel' : ''}">${l}</th>`
+  ).join('');
+  const rows = data
+    .map(
+      (r, i) =>
+        `<tr class="${r.user_id === user.id ? 'me' : ''}"><td>${i + 1}</td><td>${esc(
+          r.nickname
+        )}</td>${RANK_COLS.map(
+          ([k]) =>
+            `<td class="${k === by ? 'sel' : ''}">${
+              k === 'win_rate' ? Number(r[k]).toFixed(0) + '%' : r[k]
+            }</td>`
+        ).join('')}</tr>`
+    )
+    .join('');
+  el.innerHTML = `<table class="ranktable"><tr><th>#</th><th>Jogador</th>${head}</tr>${rows}</table>${
+    by === 'win_rate' ? `<p class="sub">Mínimo de ${MIN} partidas.</p>` : ''
+  }`;
+}
+
 async function createLobby() {
   const name = $('#nome').value.trim() || 'Lobby';
   await leaveCurrent();
@@ -228,7 +283,7 @@ async function createLobby() {
   if (error) return notice(error.message);
   const { error: e2 } = await supabase
     .from('lobby_players')
-    .insert({ lobby_id: data.id, nickname: nick(), team: 'red', ...myLook() });
+    .insert({ lobby_id: data.id, nickname: nick(), team: 'red' });
   if (e2) return notice(e2.message);
   const rows = DEF_TEAMS.map((d) => ({
     ...d,
@@ -263,7 +318,7 @@ async function joinLobby(id) {
       red <= blue && red < l.mode ? 'red' : blue < l.mode ? 'blue' : 'red';
     const { error } = await supabase
       .from('lobby_players')
-      .insert({ lobby_id: id, nickname: nick(), team, ...myLook() });
+      .insert({ lobby_id: id, nickname: nick(), team });
     if (error) return notice(error.message);
   }
   openRoom(id);
@@ -351,7 +406,9 @@ function onLobbyEvent(p) {
   if (!lobby) return;
   if (p.eventType === 'DELETE') {
     if (p.old.id === lobby.id) {
-      alert('O host encerrou o lobby.');
+      alert(
+        'O host saiu e a partida foi encerrada (a simulação roda no computador do host).'
+      );
       showList();
     }
     return;
@@ -446,17 +503,6 @@ function showRoom() {
     ).join('')}</select></label></div>`;
   };
 
-  const sw = (key, arr, cur) =>
-    arr
-      .map(
-        (c, i) =>
-          `<button class="sw ${
-            cur === i ? 'on' : ''
-          }" data-look="${key}" data-v="${i}" style="background:${c}" aria-label="opção ${
-            i + 1
-          }"></button>`
-      )
-      .join('');
   const opts = (obj, cur) =>
     Object.entries(obj)
       .map(
@@ -480,29 +526,6 @@ function showRoom() {
   <main class="room">
     <div class="teams">${col('red')}${col('blue')}</div>
     <div class="cfg-grid">
-      <section class="card col">
-        <h2>Meu boneco</h2>
-        <canvas id="prev" width="140" height="140"></canvas>
-        <div class="swrow"><span>Pele</span>${sw(
-          'skin',
-          SKINS,
-          mine?.skin
-        )}</div>
-        <div class="swrow"><span>Cabelo</span>${sw(
-          'hair_color',
-          HAIR_COLORS,
-          mine?.hair_color
-        )}</div>
-        <label>Estilo<select data-look="hair_style">${HAIR_STYLES.map(
-          (n, i) =>
-            `<option value="${i}" ${
-              mine?.hair_style === i ? 'selected' : ''
-            }>${n}</option>`
-        ).join('')}</select></label>
-        <label>Número<input type="number" min="1" max="99" data-look="number" value="${
-          mine?.number ?? 10
-        }" /></label>
-      </section>
       <section class="card col">
         <h2>Partida</h2>
         <label>Campo<select data-lb="field" ${hd}>${opts(
@@ -540,45 +563,6 @@ function showRoom() {
   </main>`;
   $('#sairl').onclick = leaveRoom;
   if (isHost) $('#iniciar').onclick = startMatch;
-  drawPreview();
-}
-
-function drawPreview() {
-  const c = $('#prev'),
-    mine = players.find((p) => p.user_id === user.id);
-  if (!c || !mine) return;
-  const t = T(mine.team),
-    ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, 140, 140);
-  ctx.save();
-  ctx.scale(1.5, 1.5);
-  drawPlayer(ctx, 46, 46, {
-    c1: t.c1,
-    c2: t.c2,
-    pat: t.pattern,
-    look: {
-      skin: mine.skin,
-      hairColor: mine.hair_color,
-      hairStyle: mine.hair_style,
-      number: mine.number,
-    },
-    face: { dx: 0.7, dy: 0.7 },
-    captain: t.captain_id === user.id,
-    me: false,
-  });
-  ctx.restore();
-}
-
-async function updateLook(patch) {
-  const { error } = await supabase
-    .from('lobby_players')
-    .update(patch)
-    .eq('user_id', user.id)
-    .eq('lobby_id', lobby.id);
-  if (error) return notice(error.message);
-  const look = { ...myLook(), ...patch };
-  user.user_metadata = { ...user.user_metadata, look };
-  supabase.auth.updateUser({ data: { look } });
 }
 
 app.addEventListener('click', async (e) => {
@@ -597,8 +581,6 @@ app.addEventListener('click', async (e) => {
       .update({ captain_id: b.dataset.give })
       .eq('lobby_id', lobby.id)
       .eq('team', b.dataset.t));
-  else if (b.dataset.look)
-    return updateLook({ [b.dataset.look]: +b.dataset.v });
   if (error) notice(error.message);
 });
 
@@ -606,15 +588,6 @@ app.addEventListener('change', async (e) => {
   const el = e.target;
   if (!lobby) return;
   let error;
-  if (el.dataset.look) {
-    const num = el.type === 'number';
-    return updateLook({
-      [el.dataset.look]: Math.max(
-        num ? 1 : 0,
-        Math.min(num ? 99 : 9, Math.round(+el.value) || (num ? 10 : 0))
-      ),
-    });
-  }
   if (el.dataset.lb)
     ({ error } = await supabase
       .from('lobbies')
@@ -661,22 +634,12 @@ async function enterGame() {
   app.innerHTML = `
   <main class="gamewrap">
     <div class="hud"><span class="tag" id="rt"><span id="rn">Vermelho</span> <b id="hr">0</b></span><span id="ht" class="timer">3:00</span><span class="tag" id="bt"><b id="hb">0</b> <span id="bn">Azul</span></span></div>
-    <div class="stage"><canvas id="cv"></canvas><div id="board" class="board" hidden></div></div>
+    <div class="stage"><canvas id="cv"></canvas><div id="toasts" class="toasts"></div><div id="board" class="board" hidden></div></div>
     <div class="bar"><span>Mover: WASD ou setas. Chutar: Espaço.</span><button id="sairj" class="sec">Sair da partida</button></div>
   </main>`;
-  const looks = {};
-  players.forEach((p) => {
-    looks[p.user_id] = {
-      skin: p.skin,
-      hairColor: p.hair_color,
-      hairStyle: p.hair_style,
-      number: p.number,
-    };
-  });
   const config = {
     field: lobby.field,
     ball: lobby.ball,
-    looks,
     teams: ['red', 'blue'].map((t) => ({
       name: T(t).name,
       c1: T(t).c1,
@@ -706,11 +669,26 @@ async function enterGame() {
       redName: $('#rn'),
       blueName: $('#bn'),
       board: $('#board'),
+      toasts: $('#toasts'),
     },
     onEnd: () =>
       supabase.from('lobbies').update({ status: 'waiting' }).eq('id', lobby.id),
+    onResult: recordMatch,
   });
   $('#sairj').onclick = leaveRoom;
+}
+
+/* Grava a participação no ranking (função SQL: cada um só altera o próprio registro) */
+async function recordMatch({ matchId, goals, touches, won }) {
+  const { error } = await supabase.rpc('record_match', {
+    p_match: matchId,
+    p_nickname: nick(),
+    p_goals: goals,
+    p_touches: touches,
+    p_won: won,
+  });
+  if (error) console.error('record_match:', error.message);
+  return !error;
 }
 
 async function leaveRoom() {
